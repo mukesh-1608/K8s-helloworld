@@ -1,8 +1,9 @@
-name: CI/CD Pipeline
+name: "End-to-End CI/CD: GitHub Actions + Docker + K8s"
 
 on:
   push:
     branches: [main]
+  pull_request:
 
 jobs:
   build-test-deploy:
@@ -23,34 +24,19 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Start Minikube
+        uses: medyagh/setup-minikube@latest
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: kisakitetta/helloworld-app:latest
-
-      - name: Set up kubeconfig
+      - name: Build Docker image inside Minikube
         run: |
-          echo "${{ secrets.KUBECONFIG_DATA }}" > kubeconfig.yaml
+          eval $(minikube -p minikube docker-env)
+          docker build -t helloworld-app:latest .
 
-      - name: Install kubectl
-        uses: azure/setup-kubectl@v4
-        with:
-          version: 'latest'
-
-      - name: Deploy to Kubernetes
-        env:
-          KUBECONFIG: ${{ github.workspace }}/kubeconfig.yaml
+      - name: Deploy to Minikube
         run: |
           kubectl apply -f deployment.yaml
           kubectl rollout status deployment/helloworld-app-deployment
+
+      - name: Test service (optional)
+        run: |
+          minikube service list
